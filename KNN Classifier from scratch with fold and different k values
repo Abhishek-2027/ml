@@ -1,0 +1,161 @@
+import numpy as np
+from collections import Counter
+
+# ==============================
+# K-Nearest Neighbors from scratch
+# ==============================
+
+def euclidean_distance(point1, point2):
+    """
+    Compute Euclidean distance between two points (vectors).
+    """
+    return np.sqrt(np.sum((point1 - point2) ** 2))
+
+
+def predict_classification(X_train, y_train, test_point, k):
+    """
+    Predict class of a single test point using k-NN.
+    Steps:
+      1. Compute distances from test_point to all X_train points
+      2. Find indices of k nearest neighbors
+      3. Get their labels (y_train)
+      4. Return the majority class (most common)
+    """
+    # Step 1: Compute distances
+    distances = [euclidean_distance(test_point, train_point) for train_point in X_train]
+
+    # Step 2: Get indices of the k nearest points
+    k_indices = np.argsort(distances)[:k]
+
+    # Step 3: Collect their labels
+    k_labels = [y_train[i] for i in k_indices]
+
+    # Step 4: Return the most common label
+    return Counter(k_labels).most_common(1)[0][0]
+
+
+def cross_validation(X, y, k_values, n_folds=5):
+    """
+    Perform n-fold cross-validation for different k values.
+    Returns mean accuracy for each k.
+    """
+    indices = np.arange(len(X))
+    folds = np.array_split(indices, n_folds)
+    results = {}
+
+    for k in k_values:
+        fold_accuracies = []
+
+        # Loop through folds
+        for i in range(n_folds):
+            # Validation indices for this fold
+            val_idx = folds[i]
+
+            # Training indices = all other folds
+            train_idx = np.concatenate([folds[j] for j in range(n_folds) if j != i])
+
+            X_train, y_train = X[train_idx], y[train_idx]
+            X_val, y_val = X[val_idx], y[val_idx]
+
+            # Predict for validation set
+            preds = [predict_classification(X_train, y_train, row, k) for row in X_val]
+
+            # Compute accuracy
+            acc = np.sum(preds == y_val) / len(y_val)
+            fold_accuracies.append(acc)
+
+        # Mean accuracy for this k
+        results[k] = np.mean(fold_accuracies)
+
+    return results
+
+
+def main():
+    """
+    Main function to:
+      - Load dataset (from string)
+      - Encode labels
+      - Split train/test
+      - Perform cross-validation
+      - Evaluate final model on test set
+    """
+
+    # ========== Step 1: Load dataset ==========
+    raw_data = """
+    5.1,3.5,1.4,0.2,setosa
+    4.9,3.0,1.4,0.2,setosa
+    4.7,3.2,1.3,0.2,setosa
+    4.6,3.1,1.5,0.2,setosa
+    5.0,3.6,1.4,0.2,setosa
+    5.4,3.9,1.7,0.4,setosa
+    5.8,4.0,1.2,0.2,setosa
+    6.0,2.2,4.0,1.5,versicolor
+    6.1,2.8,4.7,1.4,versicolor
+    5.9,3.0,4.2,1.5,versicolor
+    6.7,3.1,4.4,1.4,versicolor
+    6.3,2.5,4.9,1.5,versicolor
+    6.5,3.0,5.1,2.0,virginica
+    6.2,2.8,4.5,1.5,versicolor
+    6.4,2.9,4.3,1.3,versicolor
+    5.5,2.4,4.0,1.3,versicolor
+    5.7,2.8,4.1,1.3,versicolor
+    5.8,2.7,5.1,1.9,virginica
+    6.9,3.1,5.4,2.3,virginica
+    6.0,2.2,5.0,1.5,virginica
+    6.3,2.3,5.6,2.4,virginica
+    6.1,2.8,5.6,2.4,virginica
+    5.6,2.9,3.6,1.3,versicolor
+    5.8,2.7,4.1,1.0,versicolor
+    6.0,2.9,4.5,1.5,versicolor
+    6.1,2.6,4.7,1.4,versicolor
+    6.5,3.0,5.2,2.0,virginica
+    6.2,2.9,5.4,2.3,virginica
+    5.9,3.0,5.1,1.8,virginica
+    6.3,2.7,5.6,2.1,virginica
+    """
+
+    # Parse dataset into features + labels
+    lines = raw_data.strip().split("\n")
+    X, y = [], []
+    for line in lines:
+        parts = line.split(",")
+        features = [float(p) for p in parts[:-1]]
+        label = parts[-1]
+        X.append(features)
+        y.append(label)
+
+    X = np.array(X, dtype=float)
+
+    # Encode labels as integers
+    label_map = {"setosa": 0, "versicolor": 1, "virginica": 2}
+    y = np.array([label_map[label] for label in y])
+
+    # ========== Step 2: Train-test split ==========
+    np.random.seed(42)  # for reproducibility
+    indices = np.arange(len(X))
+    np.random.shuffle(indices)
+
+    X, y = X[indices], y[indices]
+    split = int(0.8 * len(X))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
+
+    # ========== Step 3: Cross-validation ==========
+    k_values = [1, 3, 5, 7, 9]
+    results = cross_validation(X_train, y_train, k_values)
+
+    print("5-FOLD CROSS VALIDATION RESULTS")
+    print("k-value | Mean Accuracy")
+    print("-------------------------")
+    for k, acc in results.items():
+        print(f"{k:<7} | {acc:.2f}")
+
+    # ========== Step 4: Final Evaluation ==========
+    print("\nFINAL EVALUATION ON TEST SET (k=1)")
+    test_preds = [predict_classification(X_train, y_train, row, k=1) for row in X_test]
+    test_acc = np.sum(test_preds == y_test) / len(y_test)
+    print(f"Test accuracy: {test_acc:.2f}")
+
+
+if __name__ == "__main__":
+    main()
